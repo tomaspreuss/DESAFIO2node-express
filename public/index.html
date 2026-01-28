@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Mi colección de libros</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 20px auto; }
+    input, button, select { padding: 6px; margin: 4px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background: #f4f4f4; }
+    .row-actions button { margin-right: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Mi colección de libros</h1>
+
+  <div>
+    <input id="q" placeholder="Buscar por título, autor o género">
+    <button id="btnBuscar">Buscar</button>
+    <button id="btnReset">Reset</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>Título</th><th>Autor</th><th>Año</th><th>Género</th><th>Rating</th><th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+  <h2>Agregar / Editar libro</h2>
+  <div>
+    <input id="id" type="number" placeholder="id (opcional)">
+    <input id="titulo" placeholder="Título">
+    <input id="autor" placeholder="Autor">
+    <input id="anio" type="number" placeholder="Año (1900 - actual)">
+    <input id="genero" placeholder="Género">
+    <input id="rating" type="number" placeholder="Rating (1-5)" min="1" max="5" step="1">
+    <button id="btnCrear">Crear</button>
+    <button id="btnActualizar">Actualizar</button>
+  </div>
+
+  <script>
+    async function listar(q='') {
+      const qs = q ? `?q=${encodeURIComponent(q)}&page=1&limit=50` : '?page=1&limit=50';
+      const r = await fetch('/libros' + qs);
+      const data = await r.json();
+      const tbody = document.getElementById('tbody');
+      tbody.innerHTML = '';
+      data.results.forEach(l => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${l.id}</td>
+          <td>${l.titulo}</td>
+          <td>${l.autor}</td>
+          <td>${l.anio}</td>
+          <td>${l.genero}</td>
+          <td>${l.rating}</td>
+          <td class="row-actions">
+            <button data-id="${l.id}" class="editar">Editar</button>
+            <button data-id="${l.id}" class="borrar">Borrar</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      tbody.querySelectorAll('.borrar').forEach(btn => {
+        btn.onclick = async () => {
+          const id = btn.getAttribute('data-id');
+          const r = await fetch('/libros/' + id, { method: 'DELETE' });
+          if (r.ok) listar(q);
+          else alert('Error al borrar');
+        };
+      });
+
+      tbody.querySelectorAll('.editar').forEach(btn => {
+        btn.onclick = async () => {
+          const id = btn.getAttribute('data-id');
+          const r = await fetch('/libros/' + id);
+          if (!r.ok) return alert('No encontrado');
+          const l = await r.json();
+          document.getElementById('id').value = l.id;
+          document.getElementById('titulo').value = l.titulo;
+          document.getElementById('autor').value = l.autor;
+          document.getElementById('anio').value = l.anio;
+          document.getElementById('genero').value = l.genero;
+          document.getElementById('rating').value = l.rating;
+        };
+      });
+    }
+
+    async function crear() {
+      const payload = leerFormulario();
+      const r = await fetch('/libros', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (r.status === 201) {
+        limpiarFormulario();
+        listar(document.getElementById('q').value.trim());
+      } else {
+        const err = await r.json().catch(()=>({}));
+        alert('Error al crear: ' + JSON.stringify(err));
+      }
+    }
+
+    async function actualizar() {
+      const payload = leerFormulario();
+      if (!payload.id) return alert('Debe seleccionar un libro (id) para actualizar');
+      const r = await fetch('/libros/' + payload.id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (r.ok) {
+        limpiarFormulario();
+        listar(document.getElementById('q').value.trim());
+      } else {
+        const err = await r.json().catch(()=>({}));
+        alert('Error al actualizar: ' + JSON.stringify(err));
+      }
+    }
+
+    function leerFormulario() {
+      const idVal = document.getElementById('id').value;
+      return {
+        id: idVal ? parseInt(idVal) : undefined,
+        titulo: document.getElementById('titulo').value,
+        autor: document.getElementById('autor').value,
+        anio: parseInt(document.getElementById('anio').value),
+        genero: document.getElementById('genero').value,
+        rating: parseFloat(document.getElementById('rating').value)
+      };
+    }
+
+    function limpiarFormulario() {
+      ['id','titulo','autor','anio','genero','rating'].forEach(id => document.getElementById(id).value = '');
+    }
+
+    document.getElementById('btnBuscar').onclick = () => listar(document.getElementById('q').value.trim());
+    document.getElementById('btnReset').onclick = () => { document.getElementById('q').value=''; listar(); };
+    document.getElementById('btnCrear').onclick = crear;
+    document.getElementById('btnActualizar').onclick = actualizar;
+
+    listar();
+  </script>
+</body>
+</html>
